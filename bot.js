@@ -1,14 +1,29 @@
 import Discord from 'discord.js';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
+import express from 'express'; // Added for health check endpoint
 dotenv.config();
+
+// Create Express app for health checks
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Basic health check endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    bot: client?.user?.tag || 'not logged in',
+    serverMonitoring: checkInterval ? 'active' : 'inactive',
+    lastCheck: new Date().toISOString()
+  });
+});
 
 // Configuration
 const CHECK_INTERVAL = 10000; // 10 seconds
-const SERVER_TIMEOUT = 5000; // 5 seconds timeout for server response
-const OFFLINE_THRESHOLD = 2; // Number of failed checks before declaring offline
+const SERVER_TIMEOUT = 5000; // 5 seconds timeout
+const OFFLINE_THRESHOLD = 2; // Failed checks before declaring offline
 
-// Track server state
+// Server state tracking
 let consecutiveFails = 0;
 let lastStatusMessageId = null;
 let maintenanceMode = false;
@@ -23,7 +38,12 @@ const client = new Discord.Client({
   ]
 });
 
-// Improved server check with timeout
+// Start the health check server
+app.listen(PORT, () => {
+  console.log(`[${new Date().toISOString()}] Health check server running on port ${PORT}`);
+});
+
+// Enhanced server check with timeout
 async function checkServerStatus() {
   if (maintenanceMode) return;
 
@@ -53,7 +73,6 @@ async function checkServerStatus() {
 async function handlePotentialDowntime() {
   consecutiveFails++;
   
-  // Only announce if we've failed multiple checks (prevents false positives)
   if (consecutiveFails >= OFFLINE_THRESHOLD && isServerOnline !== false) {
     await sendStatusUpdate('⚠️ **SERVER OFFLINE**\nThe server is not responding. This may be an automatic restart or unexpected downtime.');
     isServerOnline = false;
@@ -61,7 +80,7 @@ async function handlePotentialDowntime() {
 }
 
 client.on('ready', () => {
-  console.log(`[${new Date().toISOString()}] Bot ready`);
+  console.log(`[${new Date().toISOString()}] Bot ready and logged in as ${client.user.tag}`);
   startServerMonitoring();
 });
 
@@ -71,7 +90,6 @@ function startServerMonitoring() {
   console.log(`[${new Date().toISOString()}] Starting monitoring with ${CHECK_INTERVAL/1000}s intervals`);
   checkServerStatus(); // Initial check
 }
-
 
 client.on('messageCreate', async message => {
     if (!message.content.startsWith(process.env.COMMAND_PREFIX || '!') || message.author.bot) return;
